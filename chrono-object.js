@@ -7,8 +7,8 @@ jack2d('chronoObject', ['helper', 'chrono', 'HashArray'], function(helper, chron
 
   return {
     onFrame: function(func, id) {
-      if(!this.chronoId) {
-        this.lastFunctionId = 0;
+      /*if(!this.chronoId) {
+        /*this.lastFunctionId = 0;
         this.chronoFunctions = new HashArray();
         this.chronoId = chrono.register(helper.call(this, function(deltaSeconds) {
           var functions, numFunctions, i;
@@ -23,8 +23,9 @@ jack2d('chronoObject', ['helper', 'chrono', 'HashArray'], function(helper, chron
       if(!id) {
         id = ++this.lastFunctionId;
       }
-      this.chronoFunctions.add(id, func.bind(this));
+      this.chronoFunctions.add(id, func.bind(this));*/
 
+      this.chronoId = chrono.register(helper.call(this, func));
       return this;
     },
     killOnFrame: function(id) {
