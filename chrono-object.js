@@ -24,7 +24,7 @@ jack2d('chronoObject', ['helper', 'chrono', 'HashArray'], function(helper, chron
         id = ++this.lastFunctionId;
       }
       this.chronoFunctions.add(id, func.bind(this));*/
-
+      console.log('onframe ' + id);
       this.chronoId = chrono.register(helper.call(this, func));
       return this;
     },
