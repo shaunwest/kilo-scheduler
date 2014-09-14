@@ -62,7 +62,7 @@ jack2d('chrono', ['HashArray'], function(HashArray) {
   }
 
   function getRegistered(id) {
-    return registeredCallbacks.get(id);
+    return (id) ? registeredCallbacks.get(id) : registeredCallbacks.list();
   }
 
   function requestNextFrame() {

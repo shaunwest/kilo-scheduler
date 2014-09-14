@@ -7,32 +7,19 @@ jack2d('chronoObject', ['helper', 'chrono', 'HashArray'], function(helper, chron
 
   return {
     onFrame: function(func, id) {
-      // FIXME: all modules should pass in their ids; save ids in a list so they can be killed
-      /*if(!this.chronoId) {
-        /*this.lastFunctionId = 0;
-        this.chronoFunctions = new HashArray();
-        this.chronoId = chrono.register(helper.call(this, function(deltaSeconds) {
-          var functions, numFunctions, i;
-          functions = this.chronoFunctions.items;
-          numFunctions = functions.length;
-          for(i = 0; i < numFunctions; i++) {
-            functions[i](deltaSeconds);
-          }
-        }), this.chronoId);
+      if(!this.chronoIds) {
+        this.chronoIds = [];
       }
-
-      if(!id) {
-        id = ++this.lastFunctionId;
-      }
-      this.chronoFunctions.add(id, func.bind(this));*/
-      this.chronoId = chrono.register(helper.call(this, func));
+      this.chronoIds.push(chrono.register(func.bind(this), id));
       return this;
     },
     killOnFrame: function(id) {
       if(id) {
-        this.chronoFunctions.remove(id);
-      } else {
-        chrono.unRegister(this.chronoId);
+        chrono.unRegister(id);
+      } else if(this.chronoIds) {
+        this.chronoIds.forEach(function(chronoId) {
+          chrono.unRegister(chronoId);
+        });
       }
 
       return this;
