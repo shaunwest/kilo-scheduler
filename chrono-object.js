@@ -2,23 +2,51 @@
  * Created by Shaun on 6/7/14.
  */
 
-jack2d('chronoObject', ['helper', 'chrono', 'HashArray'], function(helper, chrono, HashArray) {
+jack2d('chronoObject', ['helper', 'chrono', 'func'], function(Helper, Chrono, Func) {
   'use strict';
 
   return {
     onFrame: function(func, id) {
+      var gid = Helper.getGID(id);
+
       if(!this.chronoIds) {
         this.chronoIds = [];
       }
-      this.chronoIds.push(chrono.register(func.bind(this), id));
+      if(!this.hooks) {
+        this.hooks = {};
+      }
+
+      func = func.bind(this);
+      this.hooks[id] =  gid;
+      this.chronoIds.push(Chrono.register(func, gid));
       return this;
     },
-    killOnFrame: function(id) {
-      if(id) {
-        chrono.unRegister(id);
+    getChronoId: function(hookId) {
+      if(!this.hooks) {
+        return null;
+      }
+      return this.hooks[hookId];
+    },
+    hook: function(id, wrapper) {
+      var f, chronoId = this.getChronoId(id);
+      if(chronoId) {
+        f = Chrono.getRegistered(chronoId);
+        f = Func.wrap(f, wrapper);
+        Chrono.register(f, chronoId);
+      }
+    },
+    /*after: function(id, callback) {
+      var chronoId = this.getChronoId(id);
+      if(chronoId) {
+
+      }
+    },*/
+    killOnFrame: function(chronoId) {
+      if(chronoId) {
+        Chrono.unRegister(chronoId);
       } else if(this.chronoIds) {
         this.chronoIds.forEach(function(chronoId) {
-          chrono.unRegister(chronoId);
+          Chrono.unRegister(chronoId);
         });
       }
 

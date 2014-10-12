@@ -56,6 +56,14 @@ jack2d('chrono', ['HashArray'], function(HashArray) {
     return id;
   }
 
+  function registerAfter(afterId, callback, id) {
+    if(!id) {
+      id = lastRegisteredId++;
+    }
+    registeredCallbacks.splice(afterId, id, callback);
+    return id;
+  }
+
   function unRegister(id) {
     registeredCallbacks.remove(id);
     return obj;
@@ -154,6 +162,7 @@ jack2d('chrono', ['HashArray'], function(HashArray) {
     start: start,
     stop: stop,
     register: register,
+    registerAfter: registerAfter,
     unRegister: unRegister,
     getRegistered: getRegistered,
     registeredCount: registeredCount,
