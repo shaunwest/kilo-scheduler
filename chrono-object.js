@@ -35,12 +35,6 @@ jack2d('chronoObject', ['helper', 'chrono', 'func'], function(Helper, Chrono, Fu
         Chrono.register(f, chronoId);
       }
     },
-    /*after: function(id, callback) {
-      var chronoId = this.getChronoId(id);
-      if(chronoId) {
-
-      }
-    },*/
     killOnFrame: function(chronoId) {
       if(chronoId) {
         Chrono.unRegister(chronoId);
