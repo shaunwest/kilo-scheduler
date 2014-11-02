@@ -17,7 +17,9 @@ jack2d('chronoObject', ['helper', 'chrono', 'func'], function(Helper, Chrono, Fu
       }
 
       func = func.bind(this);
-      this.hooks[id] =  gid;
+      if(id) {
+        this.hooks[id] = gid;
+      }
       this.chronoIds.push(Chrono.register(func, gid));
       return this;
     },
@@ -27,6 +29,7 @@ jack2d('chronoObject', ['helper', 'chrono', 'func'], function(Helper, Chrono, Fu
       }
       return this.hooks[hookId];
     },
+    // wraps an existing chrono task
     hook: function(id, wrapper) {
       var f, chronoId = this.getChronoId(id);
       if(chronoId) {

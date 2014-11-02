@@ -2,7 +2,7 @@
  * Created by Shaun on 5/31/14.
  */
 
-jack2d('chrono', ['HashArray'], function(HashArray) {
+jack2d('chrono', ['HashArray', 'helper'], function(HashArray, Helper) {
   'use strict';
 
   var ONE_SECOND = 1000,
@@ -42,13 +42,16 @@ jack2d('chrono', ['HashArray'], function(HashArray) {
     return obj;
   }
 
-  function getUid() {
+  /*function getUid() {
     return ++lastUid;
-  }
+  }*/
 
   function register(callback, id) {
+    if(!Helper.isFunction(callback)) {
+      Helper.error('Jack2d: Chrono: only functions can be registered.');
+    }
     if(!id) {
-      id = lastRegisteredId++;
+      id = Helper.getGID(id); //lastRegisteredId++;
     }
 
     registeredCallbacks.add(id, callback);
@@ -114,7 +117,9 @@ jack2d('chrono', ['HashArray'], function(HashArray) {
 
     for(i = 0; i < numItems; i++) {
       item = items[i];
-      item(deltaTime);
+      if(item) {
+        item(deltaTime);
+      }
     }
   }
 
@@ -166,7 +171,7 @@ jack2d('chrono', ['HashArray'], function(HashArray) {
     unRegister: unRegister,
     getRegistered: getRegistered,
     registeredCount: registeredCount,
-    getUid: getUid,
+    //getUid: getUid,
     getFps: getFps,
     getSeconds: getSeconds,
     getWholeMultiplier: getWholeMultiplier,
