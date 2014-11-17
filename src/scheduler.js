@@ -2,12 +2,10 @@
  * Created by Shaun on 5/31/14.
  */
 
-jack2d('chrono', ['HashArray', 'helper'], function(HashArray, Helper) {
+kilo('Scheduler', ['HashArray', 'Util'], function(HashArray, Util) {
   'use strict';
 
   var ONE_SECOND = 1000,
-    wholeMultiplier = 62.5,
-    tenthMultiplier = 6.25,
     targetFps,
     actualFps,
     ticks,
@@ -42,19 +40,15 @@ jack2d('chrono', ['HashArray', 'helper'], function(HashArray, Helper) {
     return obj;
   }
 
-  /*function getUid() {
-    return ++lastUid;
-  }*/
-
   function register(callback, id) {
-    if(!Helper.isFunction(callback)) {
-      Helper.error('Jack2d: Chrono: only functions can be registered.');
+    if(!Util.isFunction(callback)) {
+      Util.error('Scheduler: only functions can be registered.');
     }
     if(!id) {
-      id = Helper.getGID(id); //lastRegisteredId++;
+      id = Util.getGID(id);
     }
 
-    registeredCallbacks.add(id, callback);
+    registeredCallbacks.set(id, callback);
 
     return id;
   }
@@ -73,7 +67,7 @@ jack2d('chrono', ['HashArray', 'helper'], function(HashArray, Helper) {
   }
 
   function getRegistered(id) {
-    return (id) ? registeredCallbacks.get(id) : registeredCallbacks.list();
+    return (id) ? registeredCallbacks.get(id) : registeredCallbacks.getValues();
   }
 
   function requestNextFrame() {
@@ -112,7 +106,7 @@ jack2d('chrono', ['HashArray', 'helper'], function(HashArray, Helper) {
   function executeFrameCallbacks(deltaTime) {
     var items, numItems, item, i;
 
-    items = registeredCallbacks.items;
+    items = registeredCallbacks.getValues();
     numItems = items.length;
 
     for(i = 0; i < numItems; i++) {
@@ -150,16 +144,6 @@ jack2d('chrono', ['HashArray', 'helper'], function(HashArray, Helper) {
     return elapsedSeconds;
   }
 
-  // TODO: consider removing
-  function getWholeMultiplier() {
-    return wholeMultiplier;
-  }
-
-  // TODO: consider removing
-  function getTenthMultiplier() {
-    return tenthMultiplier;
-  }
-
   obj = {
     __mixin: false,
     init: init,
@@ -171,11 +155,8 @@ jack2d('chrono', ['HashArray', 'helper'], function(HashArray, Helper) {
     unRegister: unRegister,
     getRegistered: getRegistered,
     registeredCount: registeredCount,
-    //getUid: getUid,
     getFps: getFps,
-    getSeconds: getSeconds,
-    getWholeMultiplier: getWholeMultiplier,
-    getTenthMultiplier: getTenthMultiplier
+    getSeconds: getSeconds
   };
 
   return obj;

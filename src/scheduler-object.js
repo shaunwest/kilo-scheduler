@@ -2,11 +2,11 @@
  * Created by Shaun on 6/7/14.
  */
 
-jack2d('chronoObject', ['helper', 'chrono', 'func'], function(Helper, Chrono, Func) {
+kilo('SchedulerObject', ['Util', 'Scheduler', 'Func'], function(Helper, Chrono, Func) {
   'use strict';
 
   return {
-    onFrame: function(func, id) {
+    onFrame: function(callback, id) {
       var gid = Helper.getGID(id);
 
       if(!this.chronoIds) {
@@ -16,11 +16,11 @@ jack2d('chronoObject', ['helper', 'chrono', 'func'], function(Helper, Chrono, Fu
         this.hooks = {};
       }
 
-      func = func.bind(this);
+      callback = callback.bind(this);
       if(id) {
         this.hooks[id] = gid;
       }
-      this.chronoIds.push(Chrono.register(func, gid));
+      this.chronoIds.push(Chrono.register(callback, gid));
       return this;
     },
     getChronoId: function(hookId) {
