@@ -5,8 +5,17 @@
   <title>Kilo Scheduler</title>
   <script src="dist/kilo-scheduler.min.js"></script>
   <script>
-    kilo(['Scheduler'], function(Scheduler) {
+    kilo(['SchedulerObject'], function(SchedulerObject) {
       'use strict';
+      var totalElapsed = 0;
+
+      SchedulerObject.onFrame(function(elapsed) {
+        console.log(totalElapsed += elapsed);
+        if(totalElapsed >= 1) {
+          this.killOnFrame();
+          console.log('done');
+        }
+      });
     });
   </script>
 </head>
