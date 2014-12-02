@@ -749,15 +749,15 @@ kilo('rect', [], function() {
  * Created by Shaun on 6/7/14.
  */
 
-kilo('SchedulerObject', ['Util', 'Scheduler', 'Func'], function(Helper, Chrono, Func) {
+kilo('SchedulerObject', ['Util', 'Scheduler', 'Func'], function(Util, Scheduler, Func) {
   'use strict';
 
   return {
     onFrame: function(callback, id) {
-      var gid = Helper.getGID(id);
+      var gid = Util.getGID(id);
 
-      if(!this.chronoIds) {
-        this.chronoIds = [];
+      if(!this.schedulerIds) {
+        this.schedulerIds = [];
       }
       if(!this.hooks) {
         this.hooks = {};
@@ -767,30 +767,31 @@ kilo('SchedulerObject', ['Util', 'Scheduler', 'Func'], function(Helper, Chrono, 
       if(id) {
         this.hooks[id] = gid;
       }
-      this.chronoIds.push(Chrono.register(callback, gid));
+      this.schedulerIds.push(Scheduler.register(callback, gid));
       return this;
     },
-    getChronoId: function(hookId) {
+    getSchedulerId: function(hookId) {
       if(!this.hooks) {
         return null;
       }
       return this.hooks[hookId];
     },
-    // wraps an existing chrono task
+    // wraps an existing Scheduler task
     hook: function(id, wrapper) {
-      var f, chronoId = this.getChronoId(id);
-      if(chronoId) {
-        f = Chrono.getRegistered(chronoId);
+      var f, schedulerId = this.getSchedulerId(id);
+      if(schedulerId) {
+        f = Scheduler.getRegistered(schedulerId);
         f = Func.wrap(f, wrapper);
-        Chrono.register(f, chronoId);
+        Scheduler.register(f, schedulerId);
       }
+      return this;
     },
-    killOnFrame: function(chronoId) {
-      if(chronoId) {
-        Chrono.unRegister(chronoId);
-      } else if(this.chronoIds) {
-        this.chronoIds.forEach(function(chronoId) {
-          Chrono.unRegister(chronoId);
+    killOnFrame: function(schedulerId) {
+      if(schedulerId) {
+        Scheduler.unRegister(schedulerId);
+      } else if(this.schedulerIds) {
+        this.schedulerIds.forEach(function(schedulerId) {
+          Scheduler.unRegister(schedulerId);
         });
       }
 
