@@ -1,8 +1,11 @@
 describe('Kilo Scheduler Spec', function() {
   var Scheduler;
 
-  beforeEach(function() {
-    Scheduler = kilo('Scheduler');
+  beforeEach(function(done) {
+    use('Scheduler', function(_Scheduler) {
+      Scheduler = _Scheduler;
+      done();
+    });
   });
 
   afterEach(function() {

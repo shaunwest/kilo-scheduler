@@ -2,15 +2,14 @@
  * Created by Shaun on 5/1/14.
  */
 
-var kilo = (function(id) {
+(function(id) {
   'use strict';
 
-  var core, Util, Injector, appConfig = {}, gids = {}, allElements, previousOwner = undefined;
+  var core, Util, Injector, types, appConfig = {}, gids = {}, allElements, previousOwner = undefined;
   var CONSOLE_ID = id;
 
   Util = {
     isDefined: function(value) { return (typeof value !== 'undefined'); },
-    //isObject: function(value) { return (value !== null && typeof value === 'object'); },
     isBoolean: function(value) { return (typeof value === 'boolean'); },
     def: function(value, defaultValue) { return (typeof value === 'undefined') ? defaultValue : value; },
     error: function(message) { throw new Error(CONSOLE_ID + ': ' + message); },
@@ -29,17 +28,20 @@ var kilo = (function(id) {
     }
   };
 
-  ['Array', 'Object', 'Arguments', 'Function', 'String', 'Number', 'Date', 'RegExp', 'HTMLImageElement'].
-    forEach(function(name) {
-      Util['is' + name] = function(obj) {
-        return Object.prototype.toString.call(obj) === '[object ' + name + ']';
-      };
-    });
+  types = ['Array', 'Object', 'Arguments', 'Function', 'String', 'Number', 'Date', 'RegExp', 'HTMLImageElement'];
+  for(var i = 0; i < types.length; i++) {
+    Util['is' + types[i]] = (function(type) { 
+      return function(obj) {
+        return Object.prototype.toString.call(obj) === '[object ' + type + ']';
+      }; 
+    })(types[i]);
+  }
 
   Injector = {
     unresolved: {},
     modules: {},
     register: function(key, deps, func, scope) {
+      this.unresolve(key);
       this.unresolved[key] = {deps: deps, func: func, scope: scope};
       return this;
     },
@@ -47,154 +49,304 @@ var kilo = (function(id) {
       if(this.modules[key]) {
         delete this.modules[key];
       }
+      return this;
     },
     setModule: function(key, module) { // save a module without doing dependency resolution
       this.modules[key] = module;
       return this;
     },
-    getDependency: function(key) {
-      var module = this.modules[key];
+    getDependency: function(key, cb) {
+      var modules, module;
+
+      modules = this.modules;
+      module = modules[key];
+
       if(module) {
-        return module;
+        cb(module);
+        return;
+      }
+
+      if(key.indexOf('/') != -1) {
+        httpGet(key, cb);
+        return;
       }
 
       module = this.unresolved[key];
       if(!module) {
-        Util.warn('Module \'' + key + '\' not found');
-        return null;
+        getElement(key, null, function(element) {
+          if(element) {
+            cb(element);
+          } else {
+            Util.warn('Module \'' + key + '\' not found');
+          }
+        });
+        return;
       }
 
       Util.log('Resolving dependencies for \'' + key + '\'');
-      module = this.modules[key] = this.resolveAndApply(module.deps, module.func, module.scope);
-      if(Util.isObject(module)) {
-        module.getType = function() { return key; };
-      }
-      return module;
-    },
-    resolve: function(deps, func, scope) {
-      var dep, depName, args = [], i;
-      for(i = 0; i < deps.length; i++) {
-        depName = deps[i];
-        dep = this.getDependency(depName);
-        if(dep) {
-          args.push(dep);
-        } else {
-          Util.warn('Can\'t resolve ' + depName);
+      this.resolveAndApply(module.deps, module.func, module.scope, function(module) {
+        if(Util.isObject(module)) {
+          module.getType = function() { return key; };
         }
+        modules[key] = module;
+        cb(module);
+      });
+
+      return;
+    },
+    resolve: function(deps, cb, index, results) {
+      var dep, depName;
+      var that = this; // FIXME
+
+      if(!deps) {
+        done();
+        return;
       }
-      return args;
+
+      index = Util.def(index, 0);
+
+      depName = deps[index];
+      if(!depName) {
+        cb(results);
+        return;
+      }
+      
+      this.getDependency(depName, function(dep) {
+        if(!results) {
+          results = [];
+        }
+        if(dep) {
+          results.push(dep);
+        } else {
+          Util.error('Can\'t resolve ' + depName);
+        }
+
+        that.resolve(deps, cb, index + 1, results);    
+      });
     },
     apply: function(args, func, scope) {
-      return func.apply(scope || core, args);
+      var result = func.apply(scope || core, args);
+      return result;
     },
-    resolveAndApply: function(deps, func, scope) {
-      return this.apply(this.resolve(deps), func, scope);
+    resolveAndApply: function(deps, func, scope, cb) {
+      var that = this;
+      this.resolve(deps, function(args) {
+        var result = that.apply(args, func, scope);
+        if(cb) {
+          cb(result);
+        }
+      });
+    },
+    process: function(deps, cb) {
+      var i, numDeps, obj;
+      if(Util.isArray(deps)) {
+        for(i = 0, numDeps = deps.length; i < numDeps; i++) {
+          obj = deps[i]; 
+          if(Util.isString(obj)) {
+            this.getDependency(obj, function(obj) {
+              cb(obj);
+            });
+          } else {
+            cb(obj);
+          }
+        }
+      } else {
+        if(Util.isString(deps)) {
+          this.getDependency(deps, function(deps) {
+            cb(deps);
+          });
+        } else {
+          cb(deps);
+        }
+      }
     }
   };
-
-  /** add these basic modules to the injector */
-  Injector
-    .setModule('helper', Util).setModule('Helper', Util).setModule('Util', Util)
-    .setModule('injector', Injector).setModule('Injector', Injector)
-    .setModule('appConfig', appConfig);
 
   /** run onReady when document readyState is 'complete' */
   function onDocumentReady(onReady) {
     var readyStateCheckInterval;
-    if (document.readyState === 'complete') {
-      onReady();
+    if(!onReady) return;
+    if(document.readyState === 'complete') {
+      onReady(document);
     } else {
       readyStateCheckInterval = setInterval(function () {
-        if (document.readyState === 'complete') {
-          onReady();
+        if(document.readyState === 'complete') {
+          onReady(document);
           clearInterval(readyStateCheckInterval);
         }
       }, 10);
     }
   }
 
-  /** the main interface */
-  core = function(keyOrDeps, depsOrFunc, funcOrScope, scope) {
-    // get dependencies
-    if(Util.isArray(keyOrDeps)) {
-      Injector.resolveAndApply(keyOrDeps, depsOrFunc, funcOrScope);
+  function registerDefinitionObject(result) {
+    var key;
+    if(Util.isObject(result)) {
+      for(key in result) {
+        if(result.hasOwnProperty(key)) {
+          Injector.register(key, [], (
+            function(func) {
+              return function() { return func; };
+            }
+          )(result[key]));
+        }
+      }
+    }
+  }
 
-    // register a new module (with dependencies)
-    } else if(Util.isArray(depsOrFunc) && Util.isFunction(funcOrScope)) {
-      Injector.register(keyOrDeps, depsOrFunc, funcOrScope, scope);
+  // TODO: performance
+  function getElement(elementId, container, cb) {
+    onDocumentReady(function(document) {
+      var i, numElements, element, elements, bracketIndex, results = [];
+      if(!container) {
+        if(!allElements) {
+          container = document.getElementsByTagName('body');
+          if(!container || !container[0]) {
+            return;
+          }
+          allElements = container[0].querySelectorAll('*');
+        }
+        elements = allElements;
+      } else {
+        elements = container.querySelectorAll('*');
+      }
 
-    // register a new module (without dependencies)
-    } else if(Util.isFunction(depsOrFunc)) {
-      Injector.register(keyOrDeps, [], depsOrFunc, funcOrScope);
+      bracketIndex = elementId.indexOf('[]');
+      if(bracketIndex !== -1) {
+        elementId = elementId.substring(0, bracketIndex);
+      }
+      for(i = 0, numElements = elements.length; i < numElements; i++) {
+        element = elements[i];
+        if(element.hasAttribute('data-' + elementId)) {
+          results.push(element);
+        }
+      }
+      if(bracketIndex === -1) {
+        cb(results[0]);
+      } else {
+        cb(results);
+      }
+    }); 
+  }
 
-    // get a module
-    } else if(keyOrDeps && !Util.isDefined(depsOrFunc)) {
-      return Injector.getDependency(keyOrDeps);
+  function parseResponse(contentType, responseText) {
+    switch(contentType) {
+      case 'application/json':
+        return JSON.parse(responseText);
+      default:
+        return responseText;
+    }
+  }
+
+  function httpGet(url, onComplete, onProgress, contentType) {
+    var req = new XMLHttpRequest();
+
+    if(onProgress) {
+      req.addEventListener('progress', function(event) {
+        onProgress(event.loaded, event.total);
+      }, false);
     }
 
-    return null;
+    req.onerror = function(event) {
+      Util.error('Network error.');
+    };
+
+    req.onload = function() {
+      var contentType = contentType || this.getResponseHeader('content-type');
+      switch(this.status) {
+        case 500:
+        case 404:
+          onComplete(this.statusText, this.status);
+          break;
+        case 304:
+        default:
+          onComplete(parseResponse(contentType, this.responseText), this.status);
+      }
+    };
+
+    req.open('get', url, true);
+    req.send();
+  }
+
+  function register(key, depsOrFunc, funcOrScope, scope) {
+    // register a new module (with dependencies)
+    if(Util.isArray(depsOrFunc) && Util.isFunction(funcOrScope)) {
+      Injector.register(key, depsOrFunc, funcOrScope, scope);
+    } 
+     // register a new module (without dependencies)
+    else if(Util.isFunction(depsOrFunc)) {
+      Injector.register(key, [], depsOrFunc, funcOrScope);
+    }
+  }
+
+  core = function() {};
+
+  core.use = function(depsOrFunc, funcOrScope, scope) {
+    // one dependency
+    if(Util.isString(depsOrFunc)) {
+      Injector.resolveAndApply([depsOrFunc], funcOrScope, scope);
+    }
+    // multiple dependencies
+    else if (Util.isArray(depsOrFunc)) {
+      Injector.resolveAndApply(depsOrFunc, funcOrScope, scope);
+    } 
+    // no dependencies
+    else if(Util.isFunction(depsOrFunc)) {
+      Injector.apply([], depsOrFunc, funcOrScope);
+    }
+  };
+
+  core.register = function(key, depsOrFunc, funcOrScope, scope) {
+    if(!depsOrFunc) {
+      return {
+        depends: function() {
+          depsOrFunc = Util.argsToArray(arguments);
+          return this;
+        },
+        factory: function(func, scope) {
+          register(key, depsOrFunc, func, scope)
+        }
+      };
+    } else {
+      return register(key, depsOrFunc, funcOrScope, scope);
+    }
   };
 
   core.unresolve = function(key) {
     Injector.unresolve(key);
   };
+
   core.noConflict = function() {
     window[id] = previousOwner;
     return core;
   };
-  core.element = function(elementId, funcOrDeps, func) {
-    var deps;
-
-    if(Util.isFunction(funcOrDeps)) {
-      func = funcOrDeps;
-    } else if(Util.isArray(funcOrDeps)) {
-      deps = funcOrDeps;
-    } else {
-      Util.error('element: second argument should be function or dependency array.');
-    }
-
-    onDocumentReady(function() {
-      var i, body, numElements, selectedElement;
-
-      if(!allElements) {
-        body = document.getElementsByTagName('body');
-        if(!body || !body[0]) {
-          return;
-        }
-        allElements = body[0].querySelectorAll('*');
-      }
-
-      for(i = 0, numElements = allElements.length; i < numElements; i++) {
-        selectedElement = allElements[i];
-        if(selectedElement.hasAttribute('data-' + elementId) || selectedElement.hasAttribute(elementId)){
-          if(deps) {
-            func.apply(selectedElement, Injector.resolve(deps));
-          } else {
-            func.call(selectedElement);
-          }
-        }
-      }
-    });
-
-    return this;
-  };
-  core.onDocumentReady = core.ready = onDocumentReady;
+  core.onDocumentReady = onDocumentReady;
   core.log = true;
 
-  /** create global reference to core */
+  /** add these basic modules to the injector */
+  Injector
+    .setModule('helper', Util).setModule('Helper', Util).setModule('Util', Util)
+    .setModule('injector', Injector).setModule('Injector', Injector)
+    .setModule('element', getElement)
+    .setModule('registerAll', registerDefinitionObject)
+    .setModule('httpGet', httpGet)
+    .setModule('appConfig', appConfig);
+
+  /** create global references to core */
   if(window[id]) {
     Util.warn('a preexisting value at namespace \'' + id + '\' has been overwritten.');
     previousOwner = window[id];
   }
   window[id] = core;
+  if(!window.register) window.register = core.register;
+  if(!window.use) window.use = core.use;
+
   return core;
 })('kilo');
-
 /**
  * Created by Shaun on 10/18/14.
  */
 
-kilo('Canvas', [], function() {
+register('Canvas', [], function() {
   'use strict';
 
   return {
@@ -215,19 +367,10 @@ kilo('Canvas', [], function() {
   };
 });
 /**
- * Created by Shaun on 11/2/2014.
- */
-
-kilo('Extend', ['Obj'], function(Obj) {
-  'use strict';
-
-  return Obj.extend.bind(Obj);
-});
-/**
  * Created by Shaun on 8/3/14.
  */
 
-kilo('Factory', ['Obj', 'Pool'], function(Obj, Pool) {
+register('Factory', ['Obj', 'Pool'], function(Obj, Pool) {
   'use strict';
 
   return function(TypeObject) {
@@ -241,7 +384,7 @@ kilo('Factory', ['Obj', 'Pool'], function(Obj, Pool) {
  * Created by Shaun on 7/6/14.
  */
 
-kilo('Func', [], function() {
+register('Func', [], function() {
   'use strict';
 
   function partial(f) {
@@ -259,8 +402,20 @@ kilo('Func', [], function() {
     return partial(wrapper, f);
   }
 
+  function fastPartial(f) {
+    return function() {
+      var boundArgs =  Array.prototype.slice.call(arguments);
+      var lastIndex = boundArgs.length;
+      return function(val) {
+        boundArgs[lastIndex] = val;
+        return f.apply(this, boundArgs);
+      };
+    };
+  }
+
   return {
     partial: partial,
+    fastPartial: fastPartial,
     wrap: wrap
   };
 });
@@ -268,7 +423,7 @@ kilo('Func', [], function() {
  * Created by Shaun on 6/4/14.
  */
 
-kilo('HashArray', [], function() {
+register('HashArray', function() {
   'use strict';
 
   function HashArray() {
@@ -365,7 +520,7 @@ kilo('HashArray', [], function() {
  * This is a decorator for HashArray. It adds automatic id management.
  */
 
-kilo('KeyStore', ['HashArray', 'Util'], function(HashArray, Util) {
+register('KeyStore', ['HashArray', 'Util'], function(HashArray, Util) {
   'use strict';
 
   function KeyStore() {
@@ -434,45 +589,51 @@ kilo('KeyStore', ['HashArray', 'Util'], function(HashArray, Util) {
  * Created by Shaun on 11/2/2014.
  */
 
-kilo('Mixin', ['Obj'], function(Obj) {
+register('Merge', ['Obj'], function(Obj) {
   'use strict';
 
-  return Obj.mixin.bind(Obj);
+  return Obj.merge.bind(Obj);
 });
 
 /**
  * Created by Shaun on 6/28/14.
  */
 
-kilo('Obj', ['Injector', 'Util', 'Func', 'Pool'], function(Injector, Util, Func, Pool) {
+register('Obj', ['Injector', 'Util', 'Func', 'Pool'], function(Injector, Util, Func, Pool) {
   'use strict';
 
-  function mergeObjects(giver, receiver, allowWrap, exceptionOnCollisions) {
-    giver = giver || {};
-    if(giver.__mixin === false) { // What about receiver?
-      Util.error('Can\'t mixin object because the object has disallowed it.');
-      return;
-    }
-    Object.keys(giver).forEach(function(prop) {
-      if(receiver.hasOwnProperty(prop)) {
-        if(allowWrap) {
-          receiver[prop] = Func.wrap(receiver[prop], giver[prop]);
-          Util.log('Mixin: wrapped \'' + prop + '\'');
-        } else if(exceptionOnCollisions) {
-          Util.error('Failed to merge mixin. Method \'' +
-            prop + '\' caused a name collision.');
-        } else {
-          receiver[prop] = giver[prop];
-          Util.log('Mixin: overwrote \'' + prop + '\'');
-        }
-      } else {
-        receiver[prop] = giver[prop];
-      }
+  function mergeObject(source, destination, allowWrap, exceptionOnCollisions) {
+    source = source || Pool.getObject();
+    destination = destination || Pool.getObject();
+
+    Object.keys(source).forEach(function(prop) {
+      assignProperty(source, destination, prop, allowWrap, exceptionOnCollisions);
     });
+
+    return destination;
+  }
+
+  function assignProperty(source, destination, prop, allowWrap, exceptionOnCollisions) {
+    if(destination.hasOwnProperty(prop)) {
+      if(allowWrap) {
+        destination[prop] = Func.wrap(destination[prop], source[prop]);
+        Util.log('Merge: wrapped \'' + prop + '\'');
+      } else if(exceptionOnCollisions) {
+        Util.error('Failed to merge mixin. Method \'' +
+          prop + '\' caused a name collision.');
+      } else {
+        destination[prop] = source[prop];
+        Util.log('Merge: overwrote \'' + prop + '\'');
+      }
+    } else {
+      destination[prop] = source[prop];
+    }
+
+    return destination;
   }
 
   function augmentMethods(targetObject, augmenter) {
-    var newObject = {}; // TODO: use pooling?
+    var newObject = {}; // FIXME: use pooling?
 
     Object.keys(targetObject).forEach(function(prop) {
       if(!Util.isFunction(targetObject[prop])) {
@@ -496,85 +657,92 @@ kilo('Obj', ['Injector', 'Util', 'Func', 'Pool'], function(Injector, Util, Func,
     };
   }
 
-  return {
-    replaceMethod: function(context, oldMethod, newMethod, message) {
-      Object.keys(context).forEach(function(prop) {
-        if(context[prop] === oldMethod) {
-          console.log(message);
-          context[prop] = newMethod;
-        }
-      });
-    },
-    augment: function(object, augmenter) {
-      return augmentMethods(object, augmenter);
-    },
-    clone: function(object) {
-      return this.merge(object);
-    },
-    merge: function(source, destination) {
-      var prop;
-      destination = destination || {};
-      for(prop in source) {
-        if(source.hasOwnProperty(prop)) {
-          destination[prop] = source[prop];
-        }
+  function replaceMethod(context, oldMethod, newMethod, message) {
+    Object.keys(context).forEach(function(prop) {
+      if(context[prop] === oldMethod) {
+        context[prop] = newMethod;
       }
-      return destination;
-    },
-    create: function(source) {
-      return this.mixin(source);
-    },
-    print: function(obj) {
-      var prop, str = '';
+    });
+  }
+
+  function augment(obj, augmenter) {
+    return augmentMethods(obj, augmenter);
+  }
+
+  function quickClone(obj) {
+    return quickMerge(obj);
+  }
+
+  function quickMerge(source, destination) {
+    var prop;
+    destination = destination || Pool.getObject();
+    for(prop in source) {
+      if(source.hasOwnProperty(prop)) {
+        destination[prop] = source[prop];
+      }
+    }
+    return destination;
+  }
+
+  function print(obj) {
+    var prop, str = '';
+    if(Util.isObject(obj)) {
       for(prop in obj) {
         if(obj.hasOwnProperty(prop) && !Util.isFunction(obj[prop])) {
           str += prop + ': ' + obj[prop] + '<br>';
         }
       }
-      return str;
-    },
-    clear: function(obj) {
-      var prop;
-      for(prop in obj) {
-        if(obj.hasOwnProperty(prop)) {
-          delete obj[prop];
-        }
-      }
-      return obj;
-    },
-    extend: function() {
-      var args = (arguments.length > 1) ?
-        Util.argsToArray(arguments) :
-        arguments[0];
-      return this.mixin(args, true);
-    },
-    // TODO: make this work with functions
-    // TODO: should it always create a new object? Should be able to mix into existing object
-    mixin: function(giver, allowWrap, exceptionOnCollisions) {
-      var receiver = Pool.getObject();
-      if(Util.isArray(giver)) {
-        giver.forEach(function(obj) {
-          if(Util.isString(obj)) {
-            obj = Injector.getDependency(obj);
-          }
-          mergeObjects(obj, receiver, allowWrap, exceptionOnCollisions);
-        });
-      } else {
-        if(Util.isString(giver)) {
-          giver = Injector.getDependency(giver);
-        }
-        mergeObjects(giver, receiver, allowWrap, exceptionOnCollisions);
-      }
-
-      return receiver;
     }
+    return str;
+  }
+
+  function clear(obj) {
+    var prop;
+    for(prop in obj) {
+      if(obj.hasOwnProperty(prop)) {
+        delete obj[prop];
+      }
+    }
+    return obj;
+  }
+
+  function clone(obj) {
+    return merge(obj);
+  }
+
+  function merge(source, destination, exceptionOnCollisions) {
+    Injector.process(source, function(sourceObj) {
+      destination = mergeObject(sourceObj, destination, false, exceptionOnCollisions);
+    });
+
+    return destination;
+  }
+
+  function wrap(source, destination) {
+    Injector.process(source, function(sourceObj) {
+      destination = mergeObject(sourceObj, destination, true);
+    });
+
+    return destination;
+  }
+
+  return {
+    print: print,
+    clear: clear,
+    clone: clone,
+    quickClone: quickClone,
+    merge: merge,
+    quickMerge: quickMerge,
+    wrap: wrap,
+    augment: augment,
+    replaceMethod: replaceMethod
   };
 });
 /**
  * Created by Shaun on 7/4/14.
  */
 
-kilo('Pool', [], function() {
+register('Pool', [], function() {
   'use strict';
 
   var objects = [];
@@ -587,6 +755,7 @@ kilo('Pool', [], function() {
     return newObject;
   }
 
+  // FIXME: replace with Obj.clear()
   function clearObject(obj) {
     var prop;
     for(prop in obj) {
@@ -615,7 +784,7 @@ kilo('Pool', [], function() {
  * Created by Shaun on 7/16/14.
  */
 
-kilo('rect', [], function() {
+register('rect', [], function() {
   'use strict';
 
   function containsPoint(x, y, rect) {
@@ -688,6 +857,15 @@ kilo('rect', [], function() {
   };
 });
 /**
+ * Created by Shaun on 11/2/2014.
+ */
+
+register('Wrap', ['Obj'], function(Obj) {
+  'use strict';
+
+  return Obj.wrap.bind(Obj);
+});
+/**
  * Created by Shaun on 5/31/14.
 
   http://paulirish.com/2011/requestanimationframe-for-smart-animating/
@@ -749,7 +927,7 @@ kilo('rect', [], function() {
  * Created by Shaun on 6/7/14.
  */
 
-kilo('SchedulerObject', ['Util', 'Scheduler', 'Func'], function(Util, Scheduler, Func) {
+register('SchedulerObject', ['Util', 'Scheduler', 'Func'], function(Util, Scheduler, Func) {
   'use strict';
 
   return {
@@ -803,7 +981,7 @@ kilo('SchedulerObject', ['Util', 'Scheduler', 'Func'], function(Util, Scheduler,
  * Created by Shaun on 5/31/14.
  */
 
-kilo('Scheduler', ['HashArray', 'Util'], function(HashArray, Util) {
+register('Scheduler', ['HashArray', 'Util'], function(HashArray, Util) {
   'use strict';
 
   var ONE_SECOND = 1000,

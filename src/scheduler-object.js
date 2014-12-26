@@ -2,7 +2,7 @@
  * Created by Shaun on 6/7/14.
  */
 
-kilo('SchedulerObject', ['Util', 'Scheduler', 'Func'], function(Util, Scheduler, Func) {
+register('SchedulerObject', ['Util', 'Scheduler', 'Func'], function(Util, Scheduler, Func) {
   'use strict';
 
   return {

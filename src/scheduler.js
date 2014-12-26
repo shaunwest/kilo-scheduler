@@ -2,7 +2,7 @@
  * Created by Shaun on 5/31/14.
  */
 
-kilo('Scheduler', ['HashArray', 'Util'], function(HashArray, Util) {
+register('Scheduler', ['HashArray', 'Util'], function(HashArray, Util) {
   'use strict';
 
   var ONE_SECOND = 1000,
