@@ -20,7 +20,7 @@ gulp.task('build', function() {
   return gulp.src(
     [
       'bower_components/kilo-core/src/kilo-core.js',
-      'bower_components/kilo-sup/src/**/*.js',
+      'bower_components/kilo-extra/src/**/*.js',
       'src/**/*.js'
     ])
     .pipe(concat('kilo-scheduler.js'))

@@ -296,19 +296,18 @@
   };
 
   core.register = function(key, depsOrFunc, funcOrScope, scope) {
-    if(!depsOrFunc) {
-      return {
-        depends: function() {
-          depsOrFunc = Util.argsToArray(arguments);
-          return this;
-        },
-        factory: function(func, scope) {
-          register(key, depsOrFunc, func, scope)
-        }
-      };
-    } else {
+    if(Util.isFunction(depsOrFunc) || Util.isFunction(funcOrScope)) {
       return register(key, depsOrFunc, funcOrScope, scope);
     }
+    return {
+      depends: function() {
+        depsOrFunc = Util.argsToArray(arguments);
+        return this;
+      },
+      factory: function(func, scope) {
+        register(key, depsOrFunc, func, scope)
+      }
+    };
   };
 
   core.unresolve = function(key) {
@@ -324,8 +323,8 @@
 
   /** add these basic modules to the injector */
   Injector
-    .setModule('helper', Util).setModule('Helper', Util).setModule('Util', Util)
-    .setModule('injector', Injector).setModule('Injector', Injector)
+    .setModule('Util', Util)
+    .setModule('Injector', Injector)
     .setModule('element', getElement)
     .setModule('registerAll', registerDefinitionObject)
     .setModule('httpGet', httpGet)

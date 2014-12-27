@@ -1,6 +1,8 @@
 describe('Kilo Scheduler Spec', function() {
   var Scheduler;
 
+  kilo.log = false;
+
   beforeEach(function(done) {
     use('Scheduler', function(_Scheduler) {
       Scheduler = _Scheduler;
